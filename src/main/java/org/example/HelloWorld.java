@@ -1,9 +1,12 @@
 package org.example;
+import org.joda.time.LocalTime;
 
 public class HelloWorld {
   public static void main(String[] args) {
-    SayHello hiThere = new SayHello();
-    System.out.println(hiThere.sayHello());
+      LocalTime currentTime = new LocalTime();
+		System.out.println("The current local time is: " + currentTime);
+		SayHello hiThere = new SayHello();
+      System.out.println(hiThere.sayHello());
   };
 }
 

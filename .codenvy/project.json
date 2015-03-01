@@ -1,0 +1,1 @@
+{"builders":{"default":"maven"},"runners":{"configs":{"system:/java/codenvy-cli":{"ram":128,"variables":{},"options":{}}},"default":"system:/java/codenvy-cli"},"description":"test","type":"maven","attributes":{"language":["java"]}}

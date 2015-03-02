@@ -48,11 +48,11 @@ public class WordCount {
     }
   }
   
-  public static class WordCountReduce extends Reducer<Text, Iterable<IntWritable>, Text, IntWritable> {
+  public static class WordCountReduce extends Reducer<Text, IntWritable, Text, IntWritable> {
     
     private IntWritable totalSumSet = new IntWritable();
     
-//     @Override dont know why can't work
+    @Override
     public void reduce(Text key, Iterable<IntWritable> values, Context context) throws IOException, InterruptedException {
       int sum =0;
       for (IntWritable val : values) {

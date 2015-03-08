@@ -1,8 +1,13 @@
-# maven_test
+# maven_test for hadoop hbase...
+
 This is maven test README
 
+### set up
+
 apt-get install maven 
-# mvn clean 
-# mvn compile 
+
 mvn package 
-# java -cp _.jar path 
+
+### change main
+
+modify pom.xml <mailClass>org.moerstw.hadoop.xxxx</mailClass>

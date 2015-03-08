@@ -123,7 +123,7 @@ public class HbaseTest {
     }
   }
   public static class DeleteTable {
-    public void create(String args[]) throws IOException {
+    public void create() throws IOException {
       Configuration hconf = HBaseConfiguration.create();
       HBaseAdmin admin = new HBaseAdmin(hconf);
       admin.disableTable("people");
@@ -138,14 +138,17 @@ public class HbaseTest {
     /* 1
      * CreateTable createTable = new CreateTable();
      * createTable.create();
+     * yarn jar xxx.jar
      */ 
     /* 2
      * SearchByEmail searchByEmail = new SearchByEmail();
      * searchByEmail.create(args);
+     * yarn jar xxx.jar nnnString(fa)
      */ 
     /* 3
      * DeleteTable deleteTable = new DeleteTable();
      * deleteTable.create();
+     * yarn jar xxx.jar
      */
     
     System.exit(0);

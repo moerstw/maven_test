@@ -73,7 +73,7 @@ public class HbaseTest {
       // Use GenericOptionsParser to get only the parameters to the class
       // and not all the parameters passed (when using WebHCat for example)
       String[] otherArgs = new GenericOptionsParser(hconf, args).getRemainingArgs();
-      if(otherArgs.length != 1) {
+      if(otherArgs.length != 2) {
         System.out.println("Usage:[regular expression]");
         System.exit(-1);
       }
@@ -89,7 +89,7 @@ public class HbaseTest {
       byte[] lastNameQualifier = Bytes.toBytes("last");
       
 		// Create a new regex filter
-      RegexStringComparator emailFilter = new RegexStringComparator(otherArgs[0]);
+      RegexStringComparator emailFilter = new RegexStringComparator(otherArgs[1]);
       // Attach the regex filter to a filter
       // for the email column
       SingleColumnValueFilter filter = new SingleColumnValueFilter(
@@ -135,21 +135,25 @@ public class HbaseTest {
   
   
   public static void main(String args[]) throws IOException {
-    /* 1
-     * CreateTable createTable = new CreateTable();
-     * createTable.create();
-     * yarn jar xxx.jar
-     */ 
-    /* 2
-     * SearchByEmail searchByEmail = new SearchByEmail();
-     * searchByEmail.create(args);
-     * yarn jar xxx.jar nnnString(fa)
-     */ 
-    /* 3
-     * DeleteTable deleteTable = new DeleteTable();
-     * deleteTable.create();
-     * yarn jar xxx.jar
-     */
+    Configuration hconf = HBaseConfiguration.create();
+    String[] otherArgs = new GenericOptionsParser(hconf, args).getRemainingArgs();
+    
+    if (otherArgs[0].equals("1")) {
+      // 1. yarn jar xxx.jar 1
+      CreateTable createTable = new CreateTable();
+      createTable.create();
+    } 
+    else if (otherArgs[0].equals("2")) {
+      // 2. yarn jar xxx.jar 2 nnn
+      SearchByEmail searchByEmail = new SearchByEmail();
+      searchByEmail.create(args);
+    }
+    else if (otherArgs[0].equals("3")) {
+      // 3. yarn jar xxx.jar 3
+      DeleteTable deleteTable = new DeleteTable();
+      deleteTable.create();
+    }
+     
     
     System.exit(0);
   }

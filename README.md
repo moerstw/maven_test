@@ -15,4 +15,4 @@ mvn package
 
 ### change main
 
-modify pom.xml <mailClass>org.moerstw.hadoop.xxxx</mailClass>
+modify pom.xml <mailClass>com.moerstw.hadoop.xxxx</mailClass>

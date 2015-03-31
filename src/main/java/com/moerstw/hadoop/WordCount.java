@@ -102,24 +102,32 @@ public class WordCount {
       
       //FixedLengthInputFormat, KeyValueTextInputFormat, MultiFileInputFormat, 
       //NLineInputFormat, SequenceFileInputFormat, TextInputFormat
+      // File read, write to file
+      // Regarding your second question, the default InputFormat is the TextInputFormat. 
+      // This treats each line of each input file as a separate record, and performs no parsing. 
+      // You can call these methods if you need to process your input in a different format, here are some examples:
       job.setInputFormatClass(TextInputFormat.class);
+      // The default instance of OutputFormat is TextOutputFormat, which writes (key, value) pairs on individual lines of a text file. 
       job.setOutputFormatClass(TextOutputFormat.class);
       
-      
+      // Calling job.setOutputKeyClass( NullWritable.class ); will set the types expected as output from both the map and reduce phases.
       // will set the types expected as output from both the map and reduce phases.
+      // If your Mapper emits different types than the Reducer, 
+      // you can set the types emitted by the mapper with the JobConf's setMapOutputKeyClass() and setMapOutputValueClass() methods. 
+      // These implicitly set the input types expected by the Reducer.
       job.setOutputKeyClass(Text.class);  // K2 K3  setMapOutputKeyClass K2 setInputKeyClass(JobConf) K1
-		job.setOutputValueClass(IntWritable.class);  // V2 V3 setMapOutputValueClass V2 setOutputKeyClass(JobConf) K1
+      job.setOutputValueClass(IntWritable.class);  // V2 V3 setMapOutputValueClass V2 setOutputKeyClass(JobConf) K1
       
       /*
-		 * Delete output filepath if already exists
-		 */
-		FileSystem fs = FileSystem.newInstance(getConf());
+       * Delete output filepath if already exists
+       */
+      FileSystem fs = FileSystem.newInstance(getConf());
 
-		if (fs.exists(new Path(args[1]))) {
-			fs.delete(new Path(args[1]), true);
-		}
+      if (fs.exists(new Path(args[1]))) {
+        fs.delete(new Path(args[1]), true);
+      }
       
-		// true print the progress to the user & true if the job succeeded
+      // true print the progress to the user & true if the job succeeded
       return job.waitForCompletion(true) ? 0 : 1;  
     }
     

@@ -23,6 +23,7 @@ import org.apache.hadoop.hbase.HColumnDescriptor;
 public class SpamcHbase {
 
   public void createTable() throws IOException {
+    System.out.println("6");
     Configuration hconf = HBaseConfiguration.create();
   
     // Example of setting zookeeper values for HDInsight
@@ -34,10 +35,15 @@ public class SpamcHbase {
     //config.set("hbase.cluster.distributed", "true");
 
     // create an admin object using the config
+    System.out.println("7");
     HBaseAdmin admin = new HBaseAdmin(hconf);
+    System.out.println("8");
     // create the table
     HTableDescriptor tableDescriptor = new HTableDescriptor(TableName.valueOf("DHT"));
+    tableDescriptor.addFamily(new HColumnDescriptor("construct"));
+    System.out.println("9");
     admin.createTable(tableDescriptor);
+    System.out.println("0");
   } 
   /**
    * end of createTable
@@ -56,12 +62,12 @@ public class SpamcHbase {
    */
 
 
-  public void insertRowToTable(String customerId, String itemKey, boolean[] bitMap) throws IOException {
+  public void insertRowToTable(String customerId, String itemKey, String bitMap) throws IOException {
     Configuration hconf = HBaseConfiguration.create();
     HTable table = new HTable(hconf, "DHT");
     //   row key: customerId; family: itemKey value: bitmap
     Put aRow = new Put(Bytes.toBytes(customerId));
-    aRow.add(Bytes.toBytes(itemKey), Bytes.toBytes(""), Bytes.toBytes(Arrays.toString(bitMap)));
+    aRow.add(Bytes.toBytes(itemKey), Bytes.toBytes(""), Bytes.toBytes(bitMap));
     table.put(aRow);
     // flush commits and close the table
     table.flushCommits();

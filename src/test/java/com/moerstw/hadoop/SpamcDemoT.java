@@ -8,7 +8,6 @@ import java.util.Map;
 import java.util.List;
 import java.util.Iterator;
 import java.util.Set;
-import java.math.BigInteger;
 import java.io.IOException;
 import org.apache.hadoop.mapreduce.ID;
 import org.apache.hadoop.mapreduce.Mapper;
@@ -29,10 +28,9 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.commons.logging.LogFactory;
 import org.apache.commons.logging.Log;
-
 // import org.apache.hadoop.
 
-public class SpamcDemo {
+public class SpamcDemoT {
   /**
    * Mapper type : 
    * input: default
@@ -113,9 +111,6 @@ public class SpamcDemo {
   }
   /**
    * Reducer
-   * input key: item number, input value: id + item arrive time
-   * output key: id, output value: frequence item + bitmap(int)
-   * output hbase row key: id, family key: frequence item, qualifier key: null, value: bitmap(int string)
    */
   public static class SpamcReduce extends Reducer<Text, MapWritable, Text, MapWritable> {
     private Text outKey = new Text();
@@ -153,24 +148,28 @@ public class SpamcDemo {
           String[] customerId = ((Text)pairValue.getKey()).toString().split("\t");
           outKey.set(customerId[0]);
           String[] arrayWritableTimeStamp = ((ArrayWritable)pairValue.getValue()).toStrings();
-          // int bitMapLength = Integer.parseInt(customerId[1]);
-          BigInteger bitMap = new BigInteger("0");
-          BigInteger int2 = new BigInteger("2");
+          ArrayWritable arrayWritableBooleanBitmap = new ArrayWritable(BooleanWritable.class);
+          BooleanWritable[] booleanWritableArray = new BooleanWritable[Integer.parseInt(customerId[1])];
+          boolean[] testBoolean = new boolean[Integer.parseInt(customerId[1])];
+          for(int i = 0; i < Integer.parseInt(customerId[1]); ++i) {
+            booleanWritableArray[i] = new BooleanWritable(false);
+          }
           for(int i = 0; i < arrayWritableTimeStamp.length; ++i) {
-            bitMap = bitMap.or(int2.pow(Math.abs(Integer.valueOf(arrayWritableTimeStamp[i]) - Integer.valueOf(customerId[1])) - 1));
+            booleanWritableArray[Integer.parseInt(arrayWritableTimeStamp[i])].set(true);
+            testBoolean[Integer.parseInt(arrayWritableTimeStamp[i])] = true;
           }
           
           /**
            * write back to disk; key: customerId; velue: itemKey \t bitmap
            */
            // context.write(new Text(customerId[0]), new Text(itemKey.toString() + "\t" + Arrays.toString(testBoolean)));
-          outValue.put(itemKey, new Text(bitMap.toString()));
+          outValue.put(itemKey, arrayWritableBooleanBitmap);
           context.write(outKey, outValue); 
           outValue.clear(); 
           /**
            * write to hbase;
            */
-          spamcTable.insertRowToTable(customerId[0], itemKey.toString(), bitMap.toString());
+          // spamcTable.insertRowToTable(customerId[0], itemKey.toString(), testBoolean);
         }
       }
     }

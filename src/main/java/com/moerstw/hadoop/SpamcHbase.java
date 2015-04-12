@@ -2,6 +2,8 @@ package com.moerstw.hadoop;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.TreeMap;
+import java.util.NavigableMap;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.TableName;
@@ -14,8 +16,7 @@ import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.util.GenericOptionsParser;
 import org.apache.hadoop.hbase.filter.RegexStringComparator;
 import org.apache.hadoop.hbase.filter.SingleColumnValueFilter;
-import org.apache.hadoop.hbase.client.Scan;
-import org.apache.hadoop.hbase.client.ResultScanner;
+import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.filter.CompareFilter.CompareOp;
 import org.apache.hadoop.hbase.HColumnDescriptor;
@@ -62,12 +63,12 @@ public class SpamcHbase {
    */
 
 
-  public void insertRowToTable(String customerId, String itemKey, String bitMap) throws IOException {
+  public void insertRowToTable(String customerID, String itemKey, String bitMap) throws IOException {
     Configuration hconf = HBaseConfiguration.create();
     HTable table = new HTable(hconf, "DHT");
-    //   row key: customerId; family: itemKey value: bitmap
-    Put aRow = new Put(Bytes.toBytes(customerId));
-    aRow.add(Bytes.toBytes(itemKey), Bytes.toBytes(""), Bytes.toBytes(bitMap));
+    //   row key: customerID; family: itemKey value: bitmap
+    Put aRow = new Put(Bytes.toBytes(customerID));
+    aRow.add(Bytes.toBytes("construct"), Bytes.toBytes(itemKey), Bytes.toBytes(bitMap));
     table.put(aRow);
     // flush commits and close the table
     table.flushCommits();
@@ -78,100 +79,36 @@ public class SpamcHbase {
    */
 
 
-  public void SearchByEmail (String args[]) throws IOException {
+  public NavigableMap<byte[], byte[]> getRowData(String customerID) throws IOException {
     Configuration hconf = HBaseConfiguration.create();
-    // Use GenericOptionsParser to get only the parameters to the class
-    // and not all the parameters passed (when using WebHCat for example)
-    String[] otherArgs = new GenericOptionsParser(hconf, args).getRemainingArgs();
-    if(otherArgs.length != 2) {
-      System.out.println("Usage:[regular expression]");
-      System.exit(-1);
-    }
-    
     // Open the Table
-    HTable table = new HTable(hconf, "people");
-    
-    // Define the family and qualifiers to be used
-    byte[] contactFamily = Bytes.toBytes("contactinfo");
-    byte[] emailQualifier = Bytes.toBytes("email");
-    byte[] nameFamily = Bytes.toBytes("name");
-    byte[] firstNameQualifier = Bytes.toBytes("first");
-    byte[] lastNameQualifier = Bytes.toBytes("last");
-    
-    // Create a new regex filter
-    RegexStringComparator emailFilter = new RegexStringComparator(otherArgs[1]);
-    // Attach the regex filter to a filter
-    // for the email column
-    SingleColumnValueFilter filter = new SingleColumnValueFilter(
-     contactFamily,
-     emailQualifier,
-     CompareOp.EQUAL,
-     emailFilter
-    );
-    
-    // Create a scan and set the filter
-    Scan scan = new Scan();
-    scan.setFilter(filter);
-    
+    HTable table = new HTable(hconf, "DHT");
+    // Create a get and set the filter
+    Get getR = new Get(Bytes.toBytes(customerID));
     // Get the results
-    ResultScanner results = table.getScanner(scan);
-    // Iterate over results and print values
-    for(Result result : results) {
-      String id = new String(result.getRow());
-      byte[] firstNameObj = result.getValue(nameFamily, firstNameQualifier);
-      String firstName = new String(firstNameObj);
-      byte[] lastNameObj = result.getValue(nameFamily, lastNameQualifier);
-      String lastName = new String(lastNameObj);
-      //System.out.println(firstName + " " + lastName + " - ID: " + id);
-      byte[] emailObj = result.getValue(contactFamily, emailQualifier);
-      String email = new String(emailObj);
-      System.out.println(firstName + " " + lastName + " - " + email + " - ID: " + id);        
-    }
-    results.close();
+    Result results = table.get(getR);
     table.close();
-    
+    return results.getFamilyMap(Bytes.toBytes("construct"));
   } 
   /**
-   * end of SearchByEmail 
+   * end of getRowData
    */
 
 
-  public void DeleteTable () throws IOException {
+  public void deleteTable () throws IOException {
     Configuration hconf = HBaseConfiguration.create();
     HBaseAdmin admin = new HBaseAdmin(hconf);
-    admin.disableTable("people");
-    admin.deleteTable("people");
+    /**
+     * check if exist
+     */
+    if (admin.tableExists("DHT")) {
+      admin.disableTable("DHT");
+      admin.deleteTable("DHT");
+    }
     
   } 
   /**
    * end of DeleteTable 
    */
   
-  
-   /** 
-    *public static void main(String args[]) throws IOException {
-    *  Configuration hconf = HBaseConfiguration.create();
-    *  String[] otherArgs = new GenericOptionsParser(hconf, args).getRemainingArgs();
-    * 
-    * if (otherArgs[0].equals("1")) {
-    *   // 1. yarn jar xxx.jar 1
-    *   CreateTable createTable = new CreateTable();
-    *   createTable.create();
-    * } 
-    * else if (otherArgs[0].equals("2")) {
-    *   // 2. yarn jar xxx.jar 2 nnn
-    *   SearchByEmail searchByEmail = new SearchByEmail();
-    *   searchByEmail.create(args);
-    * }
-    * else if (otherArgs[0].equals("3")) {
-    *   // 3. yarn jar xxx.jar 3
-    *   DeleteTable deleteTable = new DeleteTable();
-    *   deleteTable.create();
-    * }
-    *
-    *  
-    * 
-    * System.exit(0);
-    *}
-    */
 }

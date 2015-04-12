@@ -11,7 +11,6 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.NavigableMap;
 import java.math.BigInteger;
-import java.math.BigDecimal;
 import java.io.IOException;
 import org.apache.hadoop.mapreduce.ID;
 import org.apache.hadoop.mapreduce.Mapper;
@@ -21,14 +20,14 @@ import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.MapWritable;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.BooleanWritable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
-import org.apache.hadoop.mapreduce.lib.input.SequenceFileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
-import org.apache.hadoop.mapreduce.lib.output.SequenceFileOutputFormat;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.commons.logging.LogFactory;
@@ -40,8 +39,8 @@ public class SpamcDemo {
   /**
    * Mapper type : 
    * input: default
-   * output: key: String - String item
-   * value: arraylist - MapWritable<UUID + number of transactions, ArrayWritable<timestamp>>
+   * output: key: String -> String item
+   * value: arraylist-> MapWritable<UUID + number of transactions, ArrayWritable<timestamp>>
    *                    xxx ArrayWritable<MapWritable<UUID, ArrayWritable<timestamp>>> 
    *                    xxx TwoDArrayWritable<MapWritable<UUID, timestamp>>
    * one customer per line
@@ -66,9 +65,6 @@ public class SpamcDemo {
       // ArrayWritable arrayWritable = new ArrayWritable(Text.class); 
       ArrayWritable arrayWritable = new TextArrayWritable(); 
       Iterator iter = taskTable.entrySet().iterator();
-      /** 
-       * start using hashTable to every item and combine their timestamp to a bitmap
-       */
       while (iter.hasNext()) {
         Map.Entry entryTemp = (Map.Entry) iter.next();
         outKey.set((String) entryTemp.getKey());
@@ -125,7 +121,6 @@ public class SpamcDemo {
       super(Text.class);
     }
   }
-
   /**
    * Reducer
    * input key: item number, input value: id + item arrive time
@@ -133,7 +128,6 @@ public class SpamcDemo {
    * output hbase row key: id, family key: null, qualifier key: frequence item, value: bitmap(int string)
    */
   public static class SpamcReduce1 extends Reducer<Text, MapWritable, Text, MapWritable> {
-    Log log = LogFactory.getLog(SpamcDemo.class);
     private Text outKey = new Text();
     private MapWritable outValue = new MapWritable();
     private int MINSUP;
@@ -149,6 +143,7 @@ public class SpamcDemo {
     @Override 
     public void reduce(Text itemKey, Iterable<MapWritable> value, Context context) 
       throws IOException, InterruptedException{
+      Log log = LogFactory.getLog(SpamcDemo.class);
       List<MapWritable> arrayMapWritable = new ArrayList<MapWritable>();
       /**
        * insert Unique itemKey to hbase
@@ -156,9 +151,7 @@ public class SpamcDemo {
       SpamcHbase spamcTable = new SpamcHbase();
       // spamcTable.insertItemFamilyToTable(itemKey.toString()); 
 
-      /**
-       * collect all same item and calculate their support write to disk
-       */
+
       for (MapWritable mapWritable : value) {
         arrayMapWritable.add(new MapWritable(mapWritable));
       }
@@ -182,7 +175,7 @@ public class SpamcDemo {
           /**
            * write back to disk; key: customerId; velue: itemKey \t bitmap
            */
-          // context.write(new Text(customerId[0]), new Text(itemKey.toString() + "\t" + Arrays.toString(testBoolean)));
+           // context.write(new Text(customerId[0]), new Text(itemKey.toString() + "\t" + Arrays.toString(testBoolean)));
           outValue.put(itemKey, new Text(bitMap.toString()));
           context.write(outKey, outValue); 
           outValue.clear(); 
@@ -191,21 +184,20 @@ public class SpamcDemo {
            */
           spamcTable.insertRowToTable(customerId[0], itemKey.toString(), bitMap.toString());
         }
-        /**
-         * Ans of frequence item number
-         */
-        context.getCounter(MyCounters.Counter).increment(1);
       } // end if >= MINSUP
     } // end reduce
   } // end class Reducer1
 
   /**
-   * input: id; pattern, bitmap
-   * output: pattern; cid, bitMap
+   * would be use to pass to phase2
    */
-  public static class SpamcMap2 extends Mapper<Text, MapWritable, Text, MapWritable> {
-    Log log = LogFactory.getLog(SpamcDemo.class);
-    private MapWritable outValue = new MapWritable();
+  public static class BooleanArrayWritable extends ArrayWritable {
+    public BooleanArrayWritable () {
+      super(BooleanWritable.class);
+    }
+  }
+
+  public static class SpamcMap2 extends Mapper<Text, MapWritable, Text, Text> {
     @Override
     public void map(Text cusID, MapWritable pattern_BitMap, Context context) 
       throws IOException, InterruptedException {
@@ -217,126 +209,26 @@ public class SpamcDemo {
       SpamcHbase spamcTable = new SpamcHbase();
       treeMap = spamcTable.getRowData(cusID.toString());
       /**
-       * getKey: Text - no, getValue: Text - bigInt
-       */
-      Map.Entry<Writable, Writable> patternBitmap = pattern_BitMap.entrySet().iterator().next();
-      String outKey = ((Text)patternBitmap.getKey()).toString();
-      BigInteger patternInt = new BigInteger(((Text)patternBitmap.getValue()).toString());
-      /**
        * extend it generator new bitMap
        */
-      BigInteger andResult;
       for (Map.Entry<byte[], byte[]> entry : treeMap.entrySet()) {
-        String itemKey = new String(entry.getKey());
-        BigInteger itemBitmap = new BigInteger(new String(entry.getValue()));
-        /**
-         * I-step P & I
-         * check the last pattern is greater than item in order, \
-         * pattern format: item item \t item item \t item item item
-         * if is:
-         *   Bitwise AND directly between patternBitmap and itemBitmap 
-         *   check it is greater than 0 and commit
-         * fi
-         */
-        // if (itemKey.compareTo(outKey.substring(outKey.lastIndexOf(' ') + 1)) > 0) {
-        if (itemKey.compareTo(outKey.split("\\W+")[outKey.split("\\W+").length - 1]) > 0) {
-          andResult =  patternInt.and(itemBitmap);
-          // log.info(outKey + " " + itemKey + " " + patternInt + " " + itemBitmap + " " + andResult);
-          if (andResult.compareTo(BigInteger.ZERO) > 0) {
-            // context.write(new Text(outKey + " " + itemKey), new Text(andResult.toString()));
-            outValue.put(cusID, new Text(andResult.toString()));
-            context.write(new Text(outKey + " " + itemKey), outValue);
-            outValue.clear();
-          }
-        }
-        /**
-         * S-step P's & I 
-         * need to let pattern first 1 set to 0, and after set to 1 from pattern
-         * after that we can do Bitwise AND between patternBitmap and itemsBitmap
-         * check it is greater than 0 and commit
-         */
-        andResult = itemBitmap.and(new BigDecimal(
-          Math.pow(2, Math.floor(Math.log(patternInt.doubleValue()) / Math.log(2))))
-            .toBigInteger().subtract(BigInteger.ONE));
-        if (andResult.compareTo(BigInteger.ZERO) > 0) {
-            // context.write(new Text(outKey + "\t" + itemKey), new Text(andResult.toString()));
-            outValue.put(cusID, new Text(andResult.toString()));
-            context.write(new Text(outKey + "\t" + itemKey), outValue);
-            outValue.clear();
-        }
-      } // end for item from uuid
-    } // end of void map2
-  } // end of class Mapper2
-
-  /**
-   * Reducer2
-   * input key: pattern, input value: id + bitmap
-   * output key: id, output value: frequence pattern + bitmap(int)
-   */
-  public static class SpamcReduce2 extends Reducer<Text, MapWritable, Text, MapWritable> {
-    Log log = LogFactory.getLog(SpamcDemo.class);
-    private Text outKey = new Text();
-    private MapWritable outValue = new MapWritable();
-    private int MINSUP;
-    @Override 
-    public void setup(Context context) throws IOException, InterruptedException {
-      Configuration conf = context.getConfiguration();
-      /**
-       * set default min_support = 100000
-       */
-      MINSUP = Integer.parseInt(conf.get("minSup", "100000")); 
-    }
-    @Override 
-    public void reduce(Text patternKey, Iterable<MapWritable> idBitMap, Context context) 
-      throws IOException, InterruptedException{
-      List<MapWritable> arrayListCollectAns = new ArrayList<MapWritable>();
-      /**
-       * collect ans and >=support write to disk
-       */
-      for (MapWritable mapWritable : idBitMap) {
-        arrayListCollectAns.add(new MapWritable(mapWritable));
+        context.write(new Text(entry.getKey()), new Text(entry.getValue()));
       }
-      if (arrayListCollectAns.size() >= MINSUP) {
-        for (MapWritable mapWritable : arrayListCollectAns) {
-          Map.Entry<Writable, Writable> pairValue = mapWritable.entrySet().iterator().next();
-          /**
-           * write to disk; key: customerId; velue: pattern \t bitmap
-           */
-          // context.write((Text)pairValue.getKey(), new Text(patternKey.toString() + "\t" + ((Text)pairValue.getValue()).toString()));
-          outValue.put(patternKey, (Text)pairValue.getValue());
-          context.write((Text)pairValue.getKey(), outValue); 
-          outValue.clear(); 
-        }
-        /**
-         * Ans of frequence pattern number
-         */
-        context.getCounter(MyCounters.Counter).increment(1);
-      } // end if >= MINSUP
-    } // end reduce2
-  } // end class Reducer2
 
-  /**
-   * for record number of frequence pattern in global in every job
-   */
-  public enum MyCounters {
-    Counter
+    }
   }
+  public static class SpamcReduce2 extends Reducer<Text, MapWritable, Text, MapWritable> {
+    public void reduce(Text key, MapWritable value, Context context) 
+      throws IOException, InterruptedException {
 
+    }
+  }
   public static void main(String args[]) throws Exception {
     if(args.length < 4) {
       System.out.println("Usage: [input] [output] [minsup] [switch mode]");
       System.exit(-1);
     }
-    boolean jobSuccessOrNot = true;
-    /**
-     * round n
-     */
-    int iter = 0;
-    String originInput = args[0];
-    /**
-     * record all levels numb of fre pat
-     */
-    ArrayList<String> numOfFrePat = new ArrayList<String>();
+    int jobSuccessOrNot = 0;
     /**
      * switch for test
      * 1: only phase1
@@ -344,14 +236,6 @@ public class SpamcDemo {
      * 3: full 
      */
     int swch = Integer.parseInt(args[3]);
-    /**
-     * set timer start
-     */
-    long startTime = System.currentTimeMillis();
-    /**
-     * Job for phase1: find the frequence items and 
-     * write to disk and hbase
-     */
     if (swch == 1 || swch == 3) { 
       SpamcHbase spamcTable = new SpamcHbase();
       /**
@@ -366,6 +250,7 @@ public class SpamcDemo {
       /**
        * job set up
        */
+
       Configuration conf = new Configuration();
       conf.set("minSup", args[2]);
       Job job = Job.getInstance(conf);
@@ -378,7 +263,7 @@ public class SpamcDemo {
       job.setReducerClass(SpamcReduce1.class);
       // job.setNumReduceTasks(0);
       job.setInputFormatClass(TextInputFormat.class);
-      job.setOutputFormatClass(SequenceFileOutputFormat.class);
+      job.setOutputFormatClass(TextOutputFormat.class);
       job.setOutputKeyClass(Text.class);
       // job.setMapOutputValueClass(MapWritable.class);
       // job.setOutputValueClass(Text.class);
@@ -389,62 +274,32 @@ public class SpamcDemo {
       }
 
       jobSuccessOrNot = job.waitForCompletion(true);
-      /** 
-       * next file reading in hdfs
-       */
-      args[0] = args[1];
-      args[1] = originInput + iter++;
-      /**
-       * check if need to exit if no frequence pattern
-       */
-      int numberOfFrePattern = (int)job.getCounters().findCounter(MyCounters.Counter).getValue();
-      numOfFrePat.add("frequence pattern length" + iter + " : " + numberOfFrePattern);
-      if (numberOfFrePattern == 0)
-        System.exit(jobSuccessOrNot ? 0 : 1);
-    } // end of phase1 job 
-
-    /**
-     * Job for phase 2: extends pattern 2~n iteratively
-     */
-    while (swch == 2 || swch == 3 && jobSuccessOrNot) { 
+    }
+    int iter = 0;
+    if (swch == 2 || swch == 3) { 
       Configuration conf = new Configuration();
       conf.set("minSup", args[2]);
       Job job = Job.getInstance(conf);
       job.setJarByClass(SpamcDemo.class);
       job.setJobName("SpamcDemoP2_" + iter);
       FileInputFormat.setInputDirRecursive(job, true);
-      FileInputFormat.addInputPath(job, new Path(args[0]));
-      FileOutputFormat.setOutputPath(job, new Path(args[1]));
+      FileInputFormat.addInputPath(job, new Path(args[1]));
+      FileOutputFormat.setOutputPath(job, new Path(args[1] + iter));
       job.setMapperClass(SpamcMap2.class);
-      job.setReducerClass(SpamcReduce2.class);
-      // job.setNumReduceTasks(0);
-      job.setInputFormatClass(SequenceFileInputFormat.class);
-      job.setOutputFormatClass(SequenceFileOutputFormat.class);
+      // job.setReducerClass(SpamcReduce1.class);
+      job.setNumReduceTasks(0);
+      job.setInputFormatClass(TextInputFormat.class);
+      job.setOutputFormatClass(TextOutputFormat.class);
       job.setOutputKeyClass(Text.class);
       // job.setMapOutputValueClass(MapWritable.class);
-      // job.setOutputValueClass(Text.class);
-      job.setOutputValueClass(MapWritable.class);
+      job.setOutputValueClass(Text.class);
+      // job.setOutputValueClass(MapWritable.class);
       FileSystem fs = FileSystem.newInstance(conf);
-      if (fs.exists(new Path(args[1]) )) {
-        fs.delete(new Path(args[1]), true);
+      if (fs.exists(new Path(args[1]) + iter)) {
+        fs.delete(new Path(args[1] + iter++), true);
       }
       jobSuccessOrNot = job.waitForCompletion(true);
-      /** 
-       * next file reading in hdfs
-       */
-      args[0] = args[1];
-      args[1] = originInput + iter++;
-      /**
-       * check if need to exit if no frequence pattern
-       */
-      int numberOfFrePattern = (int)job.getCounters().findCounter(MyCounters.Counter).getValue();
-      numOfFrePat.add("frequence pattern length" + iter + " : " + numberOfFrePattern);
-      if (numberOfFrePattern == 0) {
-        numOfFrePat.forEach(b -> {System.out.println(b);});
-        break;
-      }
-    } // end of phase2 job
-    System.out.println("total time: " + ((System.currentTimeMillis() - startTime) / 1000) + " sec");
-    System.exit(jobSuccessOrNot ? 0 : 1);
+    }
+    System.exit(jobSuccessOrNot);
   } // end of main
 }
